@@ -1,9 +1,70 @@
-export const getAllTasks = (req, res) => res.send('obteniendo tareas')
+import { pool } from "../db.js";
 
-export const getTask = (req, res) => res.send('obteniendo tarea única')
+export const getAllTasks = async (req, res, next) => {
+  console.log(req.userId);
+  const result = await pool.query("SELECT * FROM tasks WHERE user_id = $1", [req.userId]);
+  return res.json(result.rows);
+};
 
-export const createTask = (req, res) => res.send('creando tarea')
+export const getTask = async (req, res, next) => {
+  const result = await pool.query("SELECT * FROM tasks WHERE id = $1", [
+    req.params.id,
+  ]);
 
-export const updateTask = (req, res) => res.send('actualizando tarea única')
+  if (result.rowCount === 0) {
+    return res.status(404).json({
+      message: "no existe una tarea con ese id",
+    });
+  }
+  return res.json(result.rows[0]);
+};
 
-export const deleteTask = (req, res) => res.send('eliminando tarea')
+export const createTask = async (req, res, next) => {
+  const { title, description } = req.body;
+
+  try {
+    const result = await pool.query(
+      "INSERT INTO tasks (title, description, user_id) VALUES ($1, $2, $3) RETURNING *",
+      [title, description, req.userId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    if (error.code === "23505") {
+      return res.status(409).json({
+        message: "Ya existe una tarea con ese título",
+      });
+    }
+    next(error);
+  }
+};
+
+export const updateTask = async (req, res) => {
+  const id = req.params.id;
+  const { title, description } = req.body;
+  const result = await pool.query(
+    "UPDATE tasks SET title = $1, description = $2 WHERE id= $3 RETURNING *",
+    [title, description, id]
+  );
+
+  if (result.rowCount === 0) {
+    return res.status(404).json({
+      message: "no existe una tarea con ese id",
+    });
+  }
+
+  return res.json(result.rows[0]);
+};
+
+export const deleteTask = async (req, res) => {
+  const result = await pool.query("DELETE FROM tasks WHERE id = $1", [
+    req.params.id,
+  ]);
+  if (result.rowCount === 0) {
+    return res.status(404).json({
+      message: "no existe una tarea con ese id",
+    });
+  }
+
+  return res.sendStatus(204);
+};
